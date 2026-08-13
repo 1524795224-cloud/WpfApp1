@@ -1,0 +1,148 @@
+﻿<Window x:Class="WpfApp1.LoginView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:local="clr-namespace:WpfApp1"
+        mc:Ignorable="d"
+        Title="界面UI设计" Height="480" Width="800"
+        WindowStartupLocation="CenterScreen">
+    <!-- button !-->
+    <Window.Resources>
+        <Style TargetType="Button"  x:Key="LoginViewButtonBase">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Width"  Value="60"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border CornerRadius="10" Background="#4F959F" >
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <!-- 界面背景设计 !-->
+    <Window.Background>
+        <LinearGradientBrush StartPoint="0.4,-0.1" EndPoint="0.6,1">
+            <GradientStop Color="#1C2857" Offset="0"/>
+            <GradientStop Color="#11192A" Offset="0.2"/>
+            <GradientStop Color="#020306" Offset="0.2"/>
+            <GradientStop Color="#182439" Offset="0.5"/>
+            <GradientStop Color="#121B2C" Offset="1"/>
+        </LinearGradientBrush>
+    </Window.Background>
+    <!-- 去除掉windows原有的边界，以及去除掉原有的按钮 !-->
+    <WindowChrome.WindowChrome>
+        <WindowChrome NonClientFrameEdges="None" UseAeroCaptionButtons="false"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid >
+        <Grid.RowDefinitions>
+            <RowDefinition Height="60"/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="50"/>
+                <ColumnDefinition Width="auto"/>
+                <ColumnDefinition />
+                <ColumnDefinition Width="auto"/>
+            </Grid.ColumnDefinitions>
+            <Image Source="/Assets/Images/XinYue.ico" Width="33"/>
+            <Border Grid.Column="1" Grid.ColumnSpan="1" Height="24" RenderTransformOrigin="0,1">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#AA6274E3" Offset="0"/>
+                        <GradientStop Color="#2B3B90" Offset="0.02"/>
+                        <GradientStop Color="#002B3B90" Offset="0.6"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.RenderTransform>
+                    <SkewTransform AngleX="-40" CenterX="0" CenterY="20"/>
+                </Border.RenderTransform>
+            </Border>
+            <TextBlock Text="宁波市信跃电子科技有限公司" Grid.Column="1" VerticalAlignment="Center" Margin="30,0" Foreground="White" FontSize="20"/>
+            <Border Grid.Column="3" BorderThickness="5" Padding="8,8">
+                <!-- 使用样式，Content="X"，点击事件 ExitApp_Click -->
+                <Button x:Name="ExitApp"
+                        Content="X"
+                        Style="{StaticResource LoginViewButtonBase}"
+                        Width="20"
+                        Height="20"
+                        Foreground="White"
+                        Click="ExitApp_Click"/>
+            </Border>
+        </Grid>
+        <Grid Grid.Row="1" Margin="80,40">
+            <Border Margin="155,112,0,0"
+                    BorderBrush="#1C2857"
+                    BorderThickness="2"
+                    Background="Cyan"
+                    CornerRadius="5"
+                    Padding="10,5"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Left">
+                <TextBlock Text="用户:" Foreground="White" FontSize="20"/>
+            </Border>
+            <Border Margin="155,170,0,0"
+                    BorderBrush="#1C2857"
+                    BorderThickness="2"
+                    Background="Cyan"
+                    CornerRadius="5"
+                    Padding="10,5"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Left">
+                <TextBlock Text="密码:" Foreground="White" FontSize="20" RenderTransformOrigin="1.763,0.62"/>
+            </Border>
+            <!--用户-->
+            <Border Margin="225,116,0,0"
+                    BorderBrush="#1C2857"
+                    BorderThickness="2"
+                    Background="Cyan"
+                    CornerRadius="5"
+                    Padding="0,0"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Left">
+                <ComboBox Text="{Binding User}" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Black" Width="264" Height="30" FontSize="20">
+                    <ComboBoxItem Content="管理员"/>
+                    <ComboBoxItem Content="员工"/>
+                </ComboBox>
+            </Border>
+            <!--密码-->
+            <Border Margin="225,173,0,0"
+                    BorderBrush="#1C2857"
+                    BorderThickness="2"
+                    Background="Cyan"
+                    CornerRadius="5"
+                    Padding="0,0"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Left">
+                <TextBox Text="{Binding Password}" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Black" Width="264" Height="30" FontSize="20"/>
+            </Border>
+            <!-- 登录按钮-->
+            <Border Margin="240,240,0,0"
+                    Padding="4,4"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Left">
+                <Button x:Name="Login" Content="登录"
+                        Style="{StaticResource LoginViewButtonBase}"
+                        Foreground="Black" Command="{Binding LoginCommand}"/>
+            </Border>
+            <!--取消按钮-->
+            <Border Margin="380,240,0,0"
+                    Padding="4,4"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Left">
+                <Button x:Name="ExitBut" Content="取消"
+                        Style="{StaticResource LoginViewButtonBase}"
+                        Foreground="Black"  Command="{Binding ExitComand}"/>
+            </Border>
+            
+        </Grid>
+    </Grid>
+</Window>
