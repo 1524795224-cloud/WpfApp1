@@ -11,11 +11,9 @@
         <ResourceDictionary Source="/WpfApp1;component/DictionaryTheme.xaml" />
         </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>-->
-        <DataTemplate DataType="{x:Type models:Class1}">
-        <views:Class1VW/>
-        </DataTemplate>
+
         <DataTemplate DataType="{x:Type models:HightSettingModel}">
-        <views:HightSettingVW/>
+            <views:HightSettingVW/>
         </DataTemplate>
     </Application.Resources>
 </Application>
