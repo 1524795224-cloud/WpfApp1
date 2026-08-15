@@ -116,7 +116,7 @@
                 </StackPanel>
             </Grid>
         </Border>
-        <ContentControl Grid.Row="1" Content="{Binding MonitorUC}"></ContentControl>
+        <!--<ContentControl Grid.Row="1" Content="{Binding MonitorUC}"></ContentControl>-->
         <!-- 内容区域（示例：显示连接状态） -->
         <Border Grid.Row="2" Background="#1F2332" BorderThickness="0,1,0,0" BorderBrush="#5518aabd">
             <Grid>

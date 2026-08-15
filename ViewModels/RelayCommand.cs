@@ -9,17 +9,17 @@ namespace WpfApp1.Models
 {
     public class RelayCommand : ICommand
     {
-       // public event EventHandler? CanExecuteChanged;
+        // public event EventHandler? CanExecuteChanged;
         private readonly Action excute;
         private readonly Func<bool> canExecute;
-        public RelayCommand(Action _execute, Func<bool> _canExecute) 
-        { 
-           excute = _execute;
-           canExecute = _canExecute;
+        public RelayCommand(Action _execute, Func<bool> _canExecute)
+        {
+            excute = _execute;
+            canExecute = _canExecute;
         }
         public bool CanExecute(object? parameter)
         {
-            if(canExecute==null)
+            if (canExecute == null)
             {
                 return true;
             }
@@ -42,8 +42,9 @@ namespace WpfApp1.Models
                     CommandManager.RequerySuggested += value;
                 }
             }
-            remove { 
-              CommandManager.RequerySuggested -= value;
+            remove
+            {
+                CommandManager.RequerySuggested -= value;
             }
         }
     }

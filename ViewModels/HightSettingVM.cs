@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using WpfApp1.Models;
 using WpfApp1.Service.Communication;
 
@@ -23,8 +24,8 @@ namespace WpfApp1.ViewModels
         {
             _model = new HightSettingModel();
             tcpSocket = new TcpSocketClient(1024);
-            tcpSocket.OnConnected +=async () => { await Task.Delay(10);Message = "高度通讯连接成功"; };
-            tcpSocket.OnDisconnected += async() => { await Task.Delay(10); Message = "高度通讯断开连接"; };           
+            tcpSocket.OnConnected +=async () => { await Task.Delay(1);Message = "高度通讯连接成功"; };
+            tcpSocket.OnDisconnected += async() => { await Task.Delay(1); Message = "高度通讯断开连接"; };           
             tcpSocket.OnReceived += async (s) => {
                 try
                 {
@@ -36,7 +37,7 @@ namespace WpfApp1.ViewModels
                    Message= ex.Message;
                 }
             };
-           _= tcpSocket.ConnectAsync(_host,_port);
+           //_= tcpSocket.ConnectAsync(_host,_port);
         }
 
         private async Task DataAnnalysis(byte[] s)
@@ -54,6 +55,24 @@ namespace WpfApp1.ViewModels
                 PIN2Y = strings[4];
                 PIN3Y = strings[5];
             });
+        }
+        public ICommand StartTcp
+        { 
+            get
+            { 
+                return new RelayCommand(Connect,IsCanExecute); 
+            }
+        }
+
+        private bool IsCanExecute()
+        {
+           if(tcpSocket.Connected) return false;
+           else return true;
+        }
+
+        private void Connect()
+        {
+           _=tcpSocket.ConnectAsync(_host, _port);
         }
 
         public string PIN1X
