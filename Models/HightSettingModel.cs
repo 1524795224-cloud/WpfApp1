@@ -14,5 +14,8 @@ namespace WpfApp1.Models
         public string? PIN1Y { get; set; }
         public string? PIN2Y { get; set; }
         public string? PIN3Y { get; set; }
+
+        //用于日志记录
+        public string? Message { get; set; } 
     }
 }

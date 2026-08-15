@@ -2,7 +2,7 @@
 using System.IO.Ports;
 using System.Threading;
 using System.Threading.Tasks;
-using WpfApp1.StaticClasses.Log;
+
 
 namespace WpfApp1.Service.Communication
 {
@@ -67,7 +67,7 @@ namespace WpfApp1.Service.Communication
                         _serialPort.DataReceived += OnDataReceived;
                         _serialPort.Open();
                         IsConnected = true;
-                        Logger.Info($"{Mdescribl}串口连接成功");
+                       // Logger.Info($"{Mdescribl}串口连接成功");
                         return true;
                     }
                     catch (Exception e)
@@ -80,8 +80,7 @@ namespace WpfApp1.Service.Communication
                             _serialPort.Dispose();
                             _serialPort = null;
                         }
-                        IsConnected = false;
-                        Logger.Error($"{Mdescribl}串口连接失败:{e.Message}");
+                        IsConnected = false;                    
                         return false;
                     }
                 }
@@ -104,7 +103,7 @@ namespace WpfApp1.Service.Communication
             }
             catch (Exception ex)
             {
-                Logger.Error($"{Mdescribl}串口接收数据失败：{ex.Message}");
+              //  Logger.Error($"{Mdescribl}串口接收数据失败：{ex.Message}");
                 SafeClosePort();
             }
         }
@@ -170,7 +169,7 @@ namespace WpfApp1.Service.Communication
 
                 if (completedTask != waitTask)
                 {
-                    Logger.Info($"{Mdescribl}读取超时,读取时间为{_readTimeOut}ms");
+                   // Logger.Info($"{Mdescribl}读取超时,读取时间为{_readTimeOut}ms");
                     lock (_lock)
                     {
                         _currentTcs.TrySetCanceled();
@@ -182,12 +181,12 @@ namespace WpfApp1.Service.Communication
             }
             catch (OperationCanceledException)
             {
-                Logger.Warning($"{Mdescribl}发送命令被取消");
+               // Logger.Warning($"{Mdescribl}发送命令被取消");
                 return string.Empty;
             }
             catch (Exception ex)
             {
-                Logger.Error($"{Mdescribl}发送命令异常：{ex.Message}");
+             
                 SafeClosePort();
                 throw;
             }

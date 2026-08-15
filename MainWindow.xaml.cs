@@ -10,7 +10,6 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using WpfApp1.Service.Communication;
-using WpfApp1.StaticClasses.Log;
 using WpfApp1.ViewModels;
 
 namespace WpfApp1
@@ -27,10 +26,7 @@ namespace WpfApp1
             InitializeComponent();
             viewModel = new MainWindowViewModel();
             this.DataContext = viewModel;
-            this.Loaded += (s, e) =>
-            {
-                Logger.Initialize(LogDataGrid, @"D:\\Logs");                                        
-            };
+           
            
           
            
