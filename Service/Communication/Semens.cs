@@ -22,7 +22,7 @@ namespace WpfApp1.Service.Communication
     /// <summary>
     /// 西门子PLC通信类（线程安全），支持S7-1200和S7-1500
     /// </summary>
-    public class Semens
+    public class Semens:IPlcServers
     {
         private SiemensS7Net plc;
         private readonly object _commLock = new object();
