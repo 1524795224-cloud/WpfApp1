@@ -1,5 +1,6 @@
 ﻿using HslCommunication;
 using HslCommunication.Profinet.Siemens;
+using WpfApp1.Service.Communication.Interfaces;
 
 
 namespace WpfApp1.Service.Communication

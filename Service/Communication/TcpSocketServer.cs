@@ -4,10 +4,11 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using WpfApp1.Service.Communication.Interfaces;
 
 namespace WpfApp1.Service.Communication
 {
-    public class TcpSocketServer : IDisposable
+    public class TcpSocketServer : ITcpSocketServer
     {
         private readonly IPEndPoint _listenEndpoint;
         private Socket? _listenSocket;

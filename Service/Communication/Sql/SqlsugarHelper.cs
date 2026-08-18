@@ -1,16 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 using SqlSugar;
 
-namespace WpfApp1.Service.Communication
+namespace WpfApp1.Service.Communication.Sql
 {
     /// <summary>
     /// SqlSugar 数据库帮助类
     /// 负责创建数据库、数据表，提供常用的插入和查询操作
     /// </summary>
-    public class SqlsugarHelper
+    public class SqlsugarHelper: ISqlsugarHelper
     {
         private SqlSugarClient _db;
         private readonly string _databaseName;

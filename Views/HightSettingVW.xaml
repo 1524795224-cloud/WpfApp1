@@ -8,23 +8,23 @@
              d:DesignHeight="450" d:DesignWidth="800">
     <Grid Background="White">
         <StackPanel>
-            <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN1X}" Height="20" ></TextBlock>
+            <Border BorderBrush="Black" BorderThickness="1,1,1,1" Background="{Binding Pin1Color}">
+                <TextBlock Text="{Binding PIN1X}" Height="20" HorizontalAlignment="Center"></TextBlock>
             </Border>
             <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN2X}" Height="20"></TextBlock>
+                <TextBlock Text="{Binding PIN2X}" Height="20" HorizontalAlignment="Center"></TextBlock>
             </Border>
             <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN3X}" Height="20" ></TextBlock>
+                <TextBlock Text="{Binding PIN3X}" Height="20" HorizontalAlignment="Center" ></TextBlock>
             </Border>
             <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN1Y}" Height="20"></TextBlock>
+                <TextBlock Text="{Binding PIN1Y}" Height="20" HorizontalAlignment="Center"></TextBlock>
             </Border>
             <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN2Y}" Height="20"></TextBlock>
+                <TextBlock Text="{Binding PIN2Y}" Height="20" HorizontalAlignment="Center"></TextBlock>
             </Border>
             <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN3Y}" Height="20" ></TextBlock>
+                <TextBlock Text="{Binding PIN3Y}" Height="20" HorizontalAlignment="Center" ></TextBlock>
             </Border>
             <Border BorderBrush="Black" BorderThickness="1,1,1,1">
                 <Button Content="启动连接" Command="{Binding StartTcp}"/>

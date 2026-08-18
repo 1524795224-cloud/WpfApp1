@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using WpfApp1.Models;
 using WpfApp1.Service.Communication;
 
@@ -54,6 +55,7 @@ namespace WpfApp1.ViewModels
                 PIN1Y = strings[3];
                 PIN2Y = strings[4];
                 PIN3Y = strings[5];
+               
             });
         }
         public ICommand StartTcp
@@ -78,7 +80,9 @@ namespace WpfApp1.ViewModels
         public string PIN1X
         {
             get { return _model.PIN1X; }
-            set { _model.PIN1X = value; OnPropertyChanged(); }
+            set { _model.PIN1X = value;
+                OnPropertyChanged(nameof(PIN1X));
+                OnPropertyChanged(nameof(Pin1Color)); }
         }
         public string PIN2X
         {
@@ -104,6 +108,16 @@ namespace WpfApp1.ViewModels
         {
             get { return _model.PIN3Y; }
             set { _model.PIN3Y = value; OnPropertyChanged(); }
+        }
+        public Brush Pin1Color
+        {
+            get
+            {
+                if (PIN1X == "5" || PIN1X == "6")
+                    return Brushes.Green;
+                else
+                    return Brushes.Red; // 或其他默认颜色
+            }
         }
         public string Message
         {
