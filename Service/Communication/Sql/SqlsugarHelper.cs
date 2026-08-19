@@ -1,13 +1,15 @@
-﻿using System.Linq.Expressions;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq.Expressions;
 using SqlSugar;
 
 namespace WpfApp1.Service.Communication.Sql
 {
     /// <summary>
     /// SqlSugar 数据库帮助类
-    /// 负责创建数据库、数据表，提供常用的插入和查询操作
+    /// 负责创建数据库、数据表，提供常用的增删改查操作
     /// </summary>
-    public class SqlsugarHelper: ISqlsugarHelper
+    public class SqlsugarHelper : ISqlsugarHelper
     {
         private SqlSugarClient _db;
         private readonly string _databaseName;
@@ -20,11 +22,6 @@ namespace WpfApp1.Service.Communication.Sql
         /// <summary>
         /// 构造函数
         /// </summary>
-        /// <param name="databaseName">数据库名称</param>
-        /// <param name="dbType">数据库类型，默认 SQL Server</param>
-        /// <param name="server">服务器地址，默认本机 (.)</param>
-        /// <param name="userId">用户名（SQL Server 身份验证时使用，Windows 身份验证可留空）</param>
-        /// <param name="password">密码（SQL Server 身份验证时使用，Windows 身份验证可留空）</param>
         public SqlsugarHelper(string databaseName, DbType dbType = DbType.SqlServer, string server = ".", string userId = null, string password = null)
         {
             _databaseName = databaseName;
@@ -33,21 +30,38 @@ namespace WpfApp1.Service.Communication.Sql
             _userId = userId;
             _password = password;
 
-            // 根据数据库类型构建连接字符串
             _connectionString = BuildConnectionString(databaseName, server, userId, password);
 
-            // 初始化 SqlSugar 客户端
-            _db = new SqlSugarClient(new ConnectionConfig
+            // 初始化并配置全局字段映射规则
+            _db = CreateClientInstance(_connectionString);
+        }
+
+        /// <summary>
+        /// 创建并配置带有全局规则（如 NVARCHAR 长度）的 SqlSugarClient
+        /// </summary>
+        private SqlSugarClient CreateClientInstance(string connectionString)
+        {
+            return new SqlSugarClient(new ConnectionConfig
             {
-                ConnectionString = _connectionString,
+                ConnectionString = connectionString,
                 DbType = _dbType,
-                IsAutoCloseConnection = true
+                IsAutoCloseConnection = true,
+                ConfigureExternalServices = new ConfigureExternalServices
+                {
+                    // 全局实体属性服务：未设置 Length 属性的 string 类型默认映射为 NVARCHAR(50)
+                    EntityService = (property, column) =>
+                    {
+                        if (property.PropertyType == typeof(string) && column.Length == 0)
+                        {
+                            column.Length = 50;
+                        }
+                    }
+                }
             });
         }
 
         /// <summary>
         /// 创建数据库（如果不存在）
-        /// 注意：创建数据库后需要重新初始化连接
         /// </summary>
         public void CreateDatabase()
         {
@@ -55,23 +69,15 @@ namespace WpfApp1.Service.Communication.Sql
             {
                 if (_dbType == DbType.SqlServer)
                 {
-                    // 对于 SQL Server，需要先连接到 master 数据库才能创建新数据库
                     string masterConnectionString = BuildMasterConnectionString();
-                    using (var masterDb = new SqlSugarClient(new ConnectionConfig
+                    using (var masterDb = CreateClientInstance(masterConnectionString))
                     {
-                        ConnectionString = masterConnectionString,
-                        DbType = _dbType,
-                        IsAutoCloseConnection = true
-                    }))
-                    {
-                        // 判断数据库是否存在
                         string checkSql = "SELECT COUNT(1) FROM master.dbo.sysdatabases WHERE name = @dbName";
                         var param = new SugarParameter("@dbName", _databaseName);
                         int exists = masterDb.Ado.GetInt(checkSql, param);
 
                         if (exists == 0)
                         {
-                            // 创建数据库（数据库名加方括号防止注入）
                             string createSql = $"CREATE DATABASE [{_databaseName}]";
                             masterDb.Ado.ExecuteCommand(createSql);
                         }
@@ -79,14 +85,8 @@ namespace WpfApp1.Service.Communication.Sql
                 }
                 else if (_dbType == DbType.MySql)
                 {
-                    // MySQL：连接时可以不指定数据库，直接连服务器
                     string serverConnectionString = BuildServerConnectionString();
-                    using (var serverDb = new SqlSugarClient(new ConnectionConfig
-                    {
-                        ConnectionString = serverConnectionString,
-                        DbType = _dbType,
-                        IsAutoCloseConnection = true
-                    }))
+                    using (var serverDb = CreateClientInstance(serverConnectionString))
                     {
                         string checkSql = "SELECT COUNT(1) FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = @dbName";
                         var param = new SugarParameter("@dbName", _databaseName);
@@ -101,17 +101,11 @@ namespace WpfApp1.Service.Communication.Sql
                 }
                 else
                 {
-                    // 其他数据库（如 SQLite 不需要创建数据库，文件即数据库）
                     throw new NotSupportedException($"当前数据库类型 {_dbType} 的自动创建数据库功能未实现，请手动创建或使用适合的连接字符串。");
                 }
 
-                // 重新初始化 SqlSugarClient，连接到新创建的数据库
-                _db = new SqlSugarClient(new ConnectionConfig
-                {
-                    ConnectionString = _connectionString,
-                    DbType = _dbType,
-                    IsAutoCloseConnection = true
-                });
+                // 重新初始化，连接到新建的数据库
+                _db = CreateClientInstance(_connectionString);
             }
             catch (Exception ex)
             {
@@ -120,9 +114,8 @@ namespace WpfApp1.Service.Communication.Sql
         }
 
         /// <summary>
-        /// 创建数据表（根据实体类型）
+        /// 根据实体类型初始化创建数据表
         /// </summary>
-        /// <param name="entityTypes">实体类型数组，例如 typeof(User), typeof(Product)</param>
         public void CreateTables(params Type[] entityTypes)
         {
             if (entityTypes == null || entityTypes.Length == 0)
@@ -140,84 +133,90 @@ namespace WpfApp1.Service.Communication.Sql
             }
         }
 
-        /// <summary>
-        /// 插入单个实体
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <param name="entity">要插入的实体对象</param>
-        /// <returns>受影响的行数</returns>
+        #region 写入操作 (Insert)
+
         public int Insert<T>(T entity) where T : class, new()
         {
             return _db.Insertable(entity).ExecuteCommand();
         }
 
-        /// <summary>
-        /// 插入单个实体并返回自增ID
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <param name="entity">要插入的实体对象</param>
-        /// <returns>自增ID值</returns>
         public int InsertReturnIdentity<T>(T entity) where T : class, new()
         {
             return _db.Insertable(entity).ExecuteReturnIdentity();
         }
 
-        /// <summary>
-        /// 批量插入实体列表
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <param name="entities">实体列表</param>
-        /// <returns>受影响的行数</returns>
         public int InsertRange<T>(List<T> entities) where T : class, new()
         {
             return _db.Insertable(entities).ExecuteCommand();
         }
 
-        /// <summary>
-        /// 查询所有数据
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <returns>实体列表</returns>
+        #endregion
+
+        #region 更新与删除操作 (Update & Delete)
+
+        public bool Update<T>(T entity) where T : class, new()
+        {
+            return _db.Updateable(entity).ExecuteCommand() > 0;
+        }
+
+        public bool Delete<T>(Expression<Func<T, bool>> predicate) where T : class, new()
+        {
+            return _db.Deleteable<T>().Where(predicate).ExecuteCommand() > 0;
+        }
+
+        #endregion
+
+        #region 查询操作 (Query)
+
         public List<T> QueryAll<T>() where T : class, new()
         {
             return _db.Queryable<T>().ToList();
         }
 
-        /// <summary>
-        /// 根据条件查询数据
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <param name="predicate">查询条件表达式，例如 it => it.Id > 10</param>
-        /// <returns>实体列表</returns>
         public List<T> QueryByCondition<T>(Expression<Func<T, bool>> predicate) where T : class, new()
         {
             return _db.Queryable<T>().Where(predicate).ToList();
         }
 
-        /// <summary>
-        /// 查询第一条数据（无结果返回 null）
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <param name="predicate">查询条件表达式</param>
-        /// <returns>实体对象或 null</returns>
         public T QueryFirst<T>(Expression<Func<T, bool>> predicate) where T : class, new()
         {
             return _db.Queryable<T>().Where(predicate).First();
         }
 
         /// <summary>
-        /// 获取原生 SqlSugarClient 实例，用于执行更复杂的操作
+        /// 核心：通过 Type 类型动态从对应的表中读取数据列表（UserControl 使用）
         /// </summary>
-        public SqlSugarClient GetClient()
+        public object QueryListByEntityType(Type entityType)
+        {
+            return _db.QueryableByObject(entityType).ToList();
+        }
+
+        /// <summary>
+        /// 通用条件分页查询
+        /// </summary>
+        public List<T> QueryPage<T>(int pageIndex, int pageSize, ref int totalCount, Expression<Func<T, bool>>? predicate = null) where T : class, new()
+        {
+            var query = _db.Queryable<T>();
+            if (predicate != null)
+            {
+                query = query.Where(predicate);
+            }
+            return query.ToPageList(pageIndex, pageSize, ref totalCount);
+        }
+
+        #endregion
+
+        #region 客户端实例获取
+
+        public ISqlSugarClient GetClient()
         {
             return _db;
         }
 
-        #region 私有方法
+        #endregion
 
-        /// <summary>
-        /// 构建连接字符串
-        /// </summary>
+        #region 私有核心辅助逻辑
+
         private string BuildConnectionString(string databaseName, string server, string userId, string password)
         {
             switch (_dbType)
@@ -225,29 +224,23 @@ namespace WpfApp1.Service.Communication.Sql
                 case DbType.SqlServer:
                     if (string.IsNullOrEmpty(userId))
                     {
-                        // Windows 身份验证
                         return $"Data Source={server};Initial Catalog={databaseName};Integrated Security=True;TrustServerCertificate=True;";
                     }
                     else
                     {
-                        // SQL Server 身份验证
                         return $"Data Source={server};Initial Catalog={databaseName};User ID={userId};Password={password};TrustServerCertificate=True;";
                     }
                 case DbType.MySql:
                     return $"Server={server};Database={databaseName};Uid={userId ?? "root"};Pwd={password ?? ""};";
                 case DbType.Sqlite:
-                    return $"Data Source={databaseName}.db;"; // SQLite 数据库名作为文件名
+                    return $"Data Source={databaseName}.db;";
                 default:
                     throw new NotSupportedException($"暂不支持数据库类型: {_dbType}");
             }
         }
 
-        /// <summary>
-        /// 构建用于创建数据库的 master 连接字符串（仅 SQL Server）
-        /// </summary>
         private string BuildMasterConnectionString()
         {
-            // 默认使用 Windows 身份验证连接 master，如果使用 SQL Server 身份验证，请自行修改
             if (string.IsNullOrEmpty(_userId))
             {
                 return $"Data Source={_server};Initial Catalog=master;Integrated Security=True;TrustServerCertificate=True;";
@@ -258,14 +251,10 @@ namespace WpfApp1.Service.Communication.Sql
             }
         }
 
-        /// <summary>
-        /// 构建不指定数据库的连接字符串（用于 MySQL 创建数据库）
-        /// </summary>
         private string BuildServerConnectionString()
         {
             if (_dbType == DbType.MySql)
             {
-                // 直接使用服务器、用户名、密码，不包含 Database
                 return $"Server={_server};Uid={_userId ?? "root"};Pwd={_password ?? ""};";
             }
             throw new NotSupportedException("仅支持 MySQL 获取服务器连接字符串");

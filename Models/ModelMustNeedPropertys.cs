@@ -21,7 +21,7 @@ namespace WpfApp1.Models
         [SugarColumn(IsNullable = false)]
         //测试时间
         [DisplayName("时间")]
-        public DateTime DateTime { get; set; }
+        public DateTime DateTime { get; set; }=DateTime.Now;
         //产品名称
         [DisplayName("产品名称")]
         public string ProductionName { get; set; }

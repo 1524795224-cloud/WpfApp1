@@ -19,6 +19,8 @@ namespace WpfApp1.Service.Communication
         private Task? _acceptTask;
         private Task? _receiveTask;
         private readonly int _bufferSize;
+        private readonly int _readTimeoutMs;
+        private readonly int _writeTimeoutMs;
         private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
 
         // Events
@@ -30,14 +32,25 @@ namespace WpfApp1.Service.Communication
         public bool IsRunning => _listenSocket != null;
         public bool HasClient => _clientSocket?.Connected ?? false;
 
-        public TcpSocketServer(IPAddress listenAddress, int port, int bufferSize = 8192)
+        /// <summary>
+        /// 构造 TCP 服务器
+        /// </summary>
+        /// <param name="listenAddress">监听地址</param>
+        /// <param name="port">监听端口</param>
+        /// <param name="bufferSize">接收缓冲区大小</param>
+        /// <param name="readTimeoutMs">读取超时（毫秒），-1 或 0 表示无限</param>
+        /// <param name="writeTimeoutMs">写入超时（毫秒），-1 或 0 表示无限</param>
+        public TcpSocketServer(IPAddress listenAddress, int port, int bufferSize = 8192,
+                               int readTimeoutMs = -1, int writeTimeoutMs = -1)
         {
             _listenEndpoint = new IPEndPoint(listenAddress, port);
             _bufferSize = bufferSize;
+            _readTimeoutMs = readTimeoutMs <= 0 ? -1 : readTimeoutMs;
+            _writeTimeoutMs = writeTimeoutMs <= 0 ? -1 : writeTimeoutMs;
         }
 
         /// <summary>
-        /// 启动监听（异步）。在没有客户端连接时会等待 Accept；一旦有客户端连接，会处理该客户端直到断开，再回到 Accept（实现一对一：同时只服务一个客户端）。
+        /// 启动监听（异步）。支持单客户端连接，断开后自动接受下一个。
         /// </summary>
         public Task StartAsync(int backlog = 100)
         {
@@ -61,7 +74,6 @@ namespace WpfApp1.Service.Communication
             {
                 try
                 {
-                    // Wait for a client
                     var accepted = await _listenSocket.AcceptAsync().ConfigureAwait(false);
                     if (cancellationToken.IsCancellationRequested)
                     {
@@ -69,7 +81,7 @@ namespace WpfApp1.Service.Communication
                         break;
                     }
 
-                    // If we already had a client, close the new one (enforce one-client-at-a-time)
+                    // 如果已有客户端，则拒绝新连接
                     if (_clientSocket != null && _clientSocket.Connected)
                     {
                         try { accepted.Shutdown(SocketShutdown.Both); } catch { }
@@ -82,13 +94,13 @@ namespace WpfApp1.Service.Communication
 
                     if (OnClientConnected != null) await OnClientConnected.Invoke().ConfigureAwait(false);
 
-                    // Wait until the receive loop ends (client disconnects) before accepting next client.
+                    // 等待接收循环结束（客户端断开）
                     if (_receiveTask != null)
                     {
-                        try { await _receiveTask.ConfigureAwait(false); } catch { /* swallow; handled in receive loop */ }
+                        try { await _receiveTask.ConfigureAwait(false); } catch { /* 忽略 */ }
                     }
 
-                    // Clean up client references (receive loop does some cleanup, but ensure)
+                    // 清理客户端引用
                     try { _networkStream?.Dispose(); } catch { }
                     _networkStream = null;
                     try { _clientSocket?.Dispose(); } catch { }
@@ -101,7 +113,6 @@ namespace WpfApp1.Service.Communication
                 catch (Exception ex)
                 {
                     OnError?.Invoke(ex);
-                    // brief delay to avoid tight error loop
                     await Task.Delay(200).ConfigureAwait(false);
                 }
             }
@@ -112,22 +123,42 @@ namespace WpfApp1.Service.Communication
             if (_clientSocket == null) throw new InvalidOperationException("Client socket is null.");
             _networkStream?.Dispose();
             _networkStream = new NetworkStream(_clientSocket, ownsSocket: true);
+
+            // 设置同步超时（对异步方法不影响，但保留）
+            if (_readTimeoutMs > 0) _networkStream.ReadTimeout = _readTimeoutMs;
+            if (_writeTimeoutMs > 0) _networkStream.WriteTimeout = _writeTimeoutMs;
+
             _receiveCts?.Dispose();
             _receiveCts = new CancellationTokenSource();
             _receiveTask = Task.Run(() => ReceiveLoopAsync(_receiveCts.Token));
         }
 
         /// <summary>
-        /// 向已连接的客户端发送字节（异步）。如果没有客户端会抛 InvalidOperationException。
+        /// 向已连接的客户端发送数据，支持写入超时。
         /// </summary>
         public async Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
         {
             if (!HasClient || _networkStream == null) throw new InvalidOperationException("No connected client.");
+
             await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                await _networkStream.WriteAsync(data, 0, data.Length, cancellationToken).ConfigureAwait(false);
-                await _networkStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                if (_writeTimeoutMs > 0) cts.CancelAfter(_writeTimeoutMs);
+
+                await _networkStream.WriteAsync(data, 0, data.Length, cts.Token).ConfigureAwait(false);
+                await _networkStream.FlushAsync(cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 外部取消，重新抛出
+                throw;
+            }
+            catch (OperationCanceledException) when (_writeTimeoutMs > 0)
+            {
+                var timeoutEx = new TimeoutException($"Write timed out after {_writeTimeoutMs} ms.");
+                OnError?.Invoke(timeoutEx);
+                throw timeoutEx;
             }
             finally
             {
@@ -135,6 +166,9 @@ namespace WpfApp1.Service.Communication
             }
         }
 
+        /// <summary>
+        /// 接收循环，每次读取应用读取超时。
+        /// </summary>
         private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
         {
             var buffer = new byte[_bufferSize];
@@ -145,16 +179,27 @@ namespace WpfApp1.Service.Communication
                     int bytesRead;
                     try
                     {
-                        bytesRead = await _networkStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
+                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                        if (_readTimeoutMs > 0) cts.CancelAfter(_readTimeoutMs);
+
+                        bytesRead = await _networkStream.ReadAsync(buffer, 0, buffer.Length, cts.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                     {
+                        // 外部取消，退出循环
                         break;
+                    }
+                    catch (OperationCanceledException) when (_readTimeoutMs > 0)
+                    {
+                        // 读取超时，断开客户端
+                        var timeoutEx = new TimeoutException($"Read timed out after {_readTimeoutMs} ms.");
+                        OnError?.Invoke(timeoutEx);
+                        break; // 退出循环，触发清理
                     }
 
                     if (bytesRead == 0)
                     {
-                        // 客户端已关闭连接
+                        // 客户端关闭连接
                         break;
                     }
 
@@ -179,7 +224,7 @@ namespace WpfApp1.Service.Communication
             }
             finally
             {
-                // Clean up client connection
+                // 清理当前客户端连接
                 try { _receiveCts?.Cancel(); } catch { }
                 try { _networkStream?.Dispose(); } catch { }
                 _networkStream = null;
@@ -188,7 +233,7 @@ namespace WpfApp1.Service.Communication
 
                 if (OnClientDisconnected != null)
                 {
-                    try { await OnClientDisconnected.Invoke().ConfigureAwait(false); } catch { /* ignore */ }
+                    try { await OnClientDisconnected.Invoke().ConfigureAwait(false); } catch { /* 忽略 */ }
                 }
             }
         }
@@ -198,7 +243,6 @@ namespace WpfApp1.Service.Communication
         /// </summary>
         public async Task StopAsync()
         {
-            // Stop accepting new clients
             try
             {
                 _acceptCts?.Cancel();
@@ -206,7 +250,6 @@ namespace WpfApp1.Service.Communication
             }
             catch { }
 
-            // Stop receiving from client
             try
             {
                 _receiveCts?.Cancel();

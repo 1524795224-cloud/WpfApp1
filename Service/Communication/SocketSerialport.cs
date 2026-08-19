@@ -18,21 +18,36 @@ namespace WpfApp1.Service.Communication
         private readonly StringBuilder _lineBuffer = new StringBuilder();
         private bool _disposed;
 
+        /// <summary>
+        /// 构造串口客户端
+        /// </summary>
+        /// <param name="portName">串口号</param>
+        /// <param name="baudRate">波特率</param>
+        /// <param name="parity">校验位</param>
+        /// <param name="dataBits">数据位</param>
+        /// <param name="stopBits">停止位</param>
+        /// <param name="encoding">文本编码（默认 UTF8）</param>
+        /// <param name="newLine">换行符（默认 \r\n）</param>
+        /// <param name="readTimeoutMs">读取超时毫秒（-1 或 0 表示无限，默认无限）</param>
+        /// <param name="writeTimeoutMs">写入超时毫秒（-1 或 0 表示无限，默认 2000）</param>
         public SocketSerialport(string portName = "COM1",
                                 int baudRate = 9600,
                                 Parity parity = Parity.None,
                                 int dataBits = 8,
                                 StopBits stopBits = StopBits.One,
                                 Encoding encoding = null,
-                                string newLine = "\r\n")
+                                string newLine = "\r\n",
+                                int readTimeoutMs = -1,
+                                int writeTimeoutMs = 2000)     // ← 新增超时参数
         {
             _syncContext = SynchronizationContext.Current;
             _port = new SerialPort(portName, baudRate, parity, dataBits, stopBits)
             {
                 Encoding = encoding ?? Encoding.UTF8,
                 NewLine = newLine ?? "\r\n",
-                ReadTimeout = SerialPort.InfiniteTimeout,
-                WriteTimeout = 2000
+                // 应用超时设置（-1 或 0 转为 InfiniteTimeout）
+                ReadTimeout = readTimeoutMs <= 0 ? SerialPort.InfiniteTimeout : readTimeoutMs,
+                WriteTimeout = writeTimeoutMs <= 0 ? SerialPort.InfiniteTimeout : writeTimeoutMs
             };
 
             _port.DataReceived += Port_DataReceived;
@@ -168,7 +183,7 @@ namespace WpfApp1.Service.Communication
                 if (!IsOpen) throw new InvalidOperationException("串口未打开");
                 lock (_syncLock)
                 {
-                    _port.Write(buffer, offset, count);
+                    _port.Write(buffer, offset, count);   // 写入超时由 SerialPort.WriteTimeout 控制
                 }
             }, cancellation);
         }
@@ -183,7 +198,7 @@ namespace WpfApp1.Service.Communication
                 if (!IsOpen) throw new InvalidOperationException("串口未打开");
                 lock (_syncLock)
                 {
-                    _port.Write(text);
+                    _port.Write(text);   // 写入超时由 SerialPort.WriteTimeout 控制
                 }
             }, cancellation);
         }
@@ -198,7 +213,7 @@ namespace WpfApp1.Service.Communication
                 if (!IsOpen) throw new InvalidOperationException("串口未打开");
                 lock (_syncLock)
                 {
-                    _port.WriteLine(line);
+                    _port.WriteLine(line);   // 写入超时由 SerialPort.WriteTimeout 控制
                 }
             }, cancellation);
         }
@@ -215,7 +230,7 @@ namespace WpfApp1.Service.Communication
                 if (bytes <= 0) return;
 
                 byte[] buffer = new byte[bytes];
-                int read = _port.Read(buffer, 0, bytes);
+                int read = _port.Read(buffer, 0, bytes);   // 读取超时由 SerialPort.ReadTimeout 控制
 
                 // 字节回调
                 var dataCopy = new byte[read];

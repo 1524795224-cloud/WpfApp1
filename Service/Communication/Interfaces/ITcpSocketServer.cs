@@ -3,7 +3,7 @@
     /// <summary>
     /// TCP 服务器接口，定义启动监听、发送数据、停止服务及事件通知。
     /// </summary>
-    internal interface ITcpSocketServer : IDisposable
+    public interface ITcpSocketServer : IDisposable
     {
         /// <summary>
         /// 服务器是否正在监听。

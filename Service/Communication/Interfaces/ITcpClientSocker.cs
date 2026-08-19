@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace WpfApp1.Service.Communication.Interfaces
 {
-    internal interface ITcpClientSocker: IDisposable
+    public interface ITcpClientSocker: IDisposable
     {
         bool Connected { get; }
         bool AutoReconnect { get; set; }

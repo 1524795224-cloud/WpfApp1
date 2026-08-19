@@ -24,7 +24,7 @@ namespace WpfApp1.Views
         public HightSettingVW()
         {
             InitializeComponent();
-            this.DataContext = new HightSettingVM();
+            //this.DataContext = new HightSettingVM();
         }
     }
 }

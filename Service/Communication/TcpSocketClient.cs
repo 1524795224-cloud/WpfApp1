@@ -3,13 +3,14 @@ using System.Net.Sockets;
 using WpfApp1.Service.Communication.Interfaces;
 
 namespace WpfApp1.Service.Communication
-
 {
-    public class TcpSocketClient : ITcpClientSocker
+    public abstract class TcpSocketClient : ITcpClientSocker
     {
         private Socket? _socket;
         private NetworkStream? _networkStream;
         private readonly int _bufferSize;
+        private readonly int _readTimeoutMs;
+        private readonly int _writeTimeoutMs;
         private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
         private CancellationTokenSource? _receiveCts;
         private Task? _receiveTask;
@@ -27,9 +28,17 @@ namespace WpfApp1.Service.Communication
         public int ReconnectDelayMs { get; set; } = 2000;
         public int MaxReconnectAttempts { get; set; } = 5;
 
-        public TcpSocketClient(int bufferSize = 8192)
+        /// <summary>
+        /// 构造 TCP 客户端
+        /// </summary>
+        /// <param name="bufferSize">接收缓冲区大小</param>
+        /// <param name="readTimeoutMs">读取超时（毫秒），-1 或 0 表示无限超时</param>
+        /// <param name="writeTimeoutMs">写入超时（毫秒），-1 或 0 表示无限超时</param>
+        public TcpSocketClient(int bufferSize = 8192, int readTimeoutMs = -1, int writeTimeoutMs = -1)
         {
             _bufferSize = bufferSize;
+            _readTimeoutMs = readTimeoutMs <= 0 ? -1 : readTimeoutMs; // 统一转为 -1 表示无限
+            _writeTimeoutMs = writeTimeoutMs <= 0 ? -1 : writeTimeoutMs;
         }
 
         /// <summary>
@@ -81,22 +90,44 @@ namespace WpfApp1.Service.Communication
             if (_socket == null) throw new InvalidOperationException("Socket is null when starting receive loop.");
             _networkStream?.Dispose();
             _networkStream = new NetworkStream(_socket, ownsSocket: true);
+
+            // 设置同步超时（对异步方法无效，但保留以备将来同步调用）
+            if (_readTimeoutMs > 0) _networkStream.ReadTimeout = _readTimeoutMs;
+            if (_writeTimeoutMs > 0) _networkStream.WriteTimeout = _writeTimeoutMs;
+
             _receiveCts?.Dispose();
             _receiveCts = new CancellationTokenSource();
             _receiveTask = Task.Run(() => ReceiveLoopAsync(_receiveCts.Token));
         }
 
         /// <summary>
-        /// 发送数据（异步）。保持发送顺序。
+        /// 发送数据（异步），支持写入超时。
         /// </summary>
         public async Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
         {
             if (!Connected || _networkStream == null) throw new InvalidOperationException("Not connected.");
+
             await _sendLock.WaitAsync(cancellationToken);
             try
             {
-                await _networkStream.WriteAsync(data, 0, data.Length, cancellationToken).ConfigureAwait(false);
-                await _networkStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                // 组合外部 token 和写入超时 token
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                if (_writeTimeoutMs > 0) cts.CancelAfter(_writeTimeoutMs);
+
+                await _networkStream.WriteAsync(data, 0, data.Length, cts.Token).ConfigureAwait(false);
+                await _networkStream.FlushAsync(cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 外部取消，重新抛出
+                throw;
+            }
+            catch (OperationCanceledException) when (_writeTimeoutMs > 0)
+            {
+                // 写入超时
+                var timeoutEx = new TimeoutException($"Write timed out after {_writeTimeoutMs} ms.");
+                OnError?.Invoke(timeoutEx);
+                throw timeoutEx;
             }
             finally
             {
@@ -105,7 +136,7 @@ namespace WpfApp1.Service.Communication
         }
 
         /// <summary>
-        /// 接收循环：读取流并触发 OnReceived 事件。按原样提供流字节，调用者负责协议解析（例如长度前缀）。
+        /// 接收循环：读取流并触发 OnReceived 事件，支持读取超时。
         /// </summary>
         private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
         {
@@ -117,10 +148,27 @@ namespace WpfApp1.Service.Communication
                     int bytesRead = 0;
                     try
                     {
-                        bytesRead = await _networkStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
+                        // 每次读取使用独立的超时 token
+                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                        if (_readTimeoutMs > 0) cts.CancelAfter(_readTimeoutMs);
+
+                        bytesRead = await _networkStream.ReadAsync(buffer, 0, buffer.Length, cts.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                     {
+                        // 外部取消，退出循环
+                        break;
+                    }
+                    catch (OperationCanceledException) when (_readTimeoutMs > 0)
+                    {
+                        // 读取超时
+                        var timeoutEx = new TimeoutException($"Read timed out after {_readTimeoutMs} ms.");
+                        OnError?.Invoke(timeoutEx);
+                        await HandleDisconnectAsync();
+                        if (AutoReconnect)
+                        {
+                            await TryAutoReconnectLoop(cancellationToken);
+                        }
                         break;
                     }
 

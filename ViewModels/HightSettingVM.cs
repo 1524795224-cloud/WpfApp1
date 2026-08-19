@@ -17,14 +17,14 @@ namespace WpfApp1.ViewModels
     {
         private string _host = "127.0.0.1";
         private int _port = 9000;
-        public TcpSocketClient tcpSocket;
+        public HightTcpClient tcpSocket;
         public readonly HightSettingModel _model;
 
 
         public HightSettingVM()
         {
             _model = new HightSettingModel();
-            tcpSocket = new TcpSocketClient(1024);
+            tcpSocket = new HightTcpClient(1024);
             tcpSocket.OnConnected +=async () => { await Task.Delay(1);Message = "高度通讯连接成功"; };
             tcpSocket.OnDisconnected += async() => { await Task.Delay(1); Message = "高度通讯断开连接"; };           
             tcpSocket.OnReceived += async (s) => {
@@ -38,23 +38,42 @@ namespace WpfApp1.ViewModels
                    Message= ex.Message;
                 }
             };
-           //_= tcpSocket.ConnectAsync(_host,_port);
+          
         }
 
         private async Task DataAnnalysis(byte[] s)
         {
             string data = Encoding.ASCII.GetString(s);
             string[] strings = data.Split(',');
-
+            //逻辑处理不要放在Invock里
+            string pin1X = strings[0];
+            string pin2X = strings[1];
+            string pin3X = strings[2];
+            string pin1Y = strings[3];
+            string pin2Y = strings[4];
+            string pin3Y = strings[5];
+            var recordModel = new HightSettingModel
+            {
+                PIN1X = strings[0],
+                PIN2X = strings[1],
+                PIN3X = strings[2],
+                PIN1Y = strings[3],
+                PIN2Y = strings[4],
+                PIN3Y = strings[5],
+                DateTime=DateTime.Now,
+                EndResult=true,
+                ProductionName="AGS110"
+            };
+            App.StorageProcessor.Enqueue(recordModel);
             // 在 UI 线程更新属性
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                PIN1X = strings[0];
-                PIN2X = strings[1];
-                PIN3X = strings[2];
-                PIN1Y = strings[3];
-                PIN2Y = strings[4];
-                PIN3Y = strings[5];
+                PIN1X = pin1X;
+                PIN2X = pin2X;
+                PIN3X = pin3X;
+                PIN1Y = pin1Y;
+                PIN2Y = pin2Y;
+                PIN3Y = pin3Y;
                
             });
         }

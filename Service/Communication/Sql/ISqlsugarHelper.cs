@@ -10,6 +10,8 @@ namespace WpfApp1.Service.Communication.Sql
     /// </summary>
     public interface ISqlsugarHelper
     {
+        #region 数据库与表初始化
+
         /// <summary>
         /// 创建数据库（如果不存在）
         /// </summary>
@@ -18,8 +20,12 @@ namespace WpfApp1.Service.Communication.Sql
         /// <summary>
         /// 创建数据表（根据实体类型）
         /// </summary>
-        /// <param name="entityTypes">实体类型数组</param>
+        /// <param name="entityTypes">实体类型数组，例如 typeof(User), typeof(Product)</param>
         void CreateTables(params Type[] entityTypes);
+
+        #endregion
+
+        #region 写入操作 (Create)
 
         /// <summary>
         /// 插入单个实体
@@ -35,6 +41,24 @@ namespace WpfApp1.Service.Communication.Sql
         /// 批量插入实体列表
         /// </summary>
         int InsertRange<T>(List<T> entities) where T : class, new();
+
+        #endregion
+
+        #region 更新与删除操作 (Update & Delete)
+
+        /// <summary>
+        /// 更新单个实体
+        /// </summary>
+        bool Update<T>(T entity) where T : class, new();
+
+        /// <summary>
+        /// 根据条件删除数据
+        /// </summary>
+        bool Delete<T>(Expression<Func<T, bool>> predicate) where T : class, new();
+
+        #endregion
+
+        #region 查询操作 (Read)
 
         /// <summary>
         /// 查询所有数据
@@ -52,8 +76,30 @@ namespace WpfApp1.Service.Communication.Sql
         T QueryFirst<T>(Expression<Func<T, bool>> predicate) where T : class, new();
 
         /// <summary>
-        /// 获取原生 SqlSugarClient 实例，用于执行更复杂的操作
+        /// 根据 Type 动态查询所有数据（专供 UserControl 用户控件绑定使用）
         /// </summary>
-        SqlSugarClient GetClient();
+        /// <param name="entityType">实体 Model 的 Type</param>
+        object QueryListByEntityType(Type entityType);
+
+        /// <summary>
+        /// 通用条件分页查询
+        /// </summary>
+        /// <typeparam name="T">实体类型</typeparam>
+        /// <param name="pageIndex">当前页码（从 1 开始）</param>
+        /// <param name="pageSize">每页展示条数</param>
+        /// <param name="totalCount">返回查到的总记录数</param>
+        /// <param name="predicate">可选条件过滤表达式</param>
+        List<T> QueryPage<T>(int pageIndex, int pageSize, ref int totalCount, Expression<Func<T, bool>>? predicate = null) where T : class, new();
+
+        #endregion
+
+        #region 底层客户端获取
+
+        /// <summary>
+        /// 获取原生 ISqlSugarClient 实例，用于执行更复杂的联表或事务操作
+        /// </summary>
+        ISqlSugarClient GetClient();
+
+        #endregion
     }
 }

@@ -13,14 +13,17 @@ namespace WpfApp1.Models
     public class HightSettingModel:ModelMustNeedPropertys
     {
        
-        [DisplayName("高度Pin1X")]  public string? PIN1X { get; set; }       
-        [DisplayName("高度Pin2X")]  public string? PIN2X { get; set; }     
-        [DisplayName("高度Pin3X")]  public string? PIN3X { get; set; }
+        [DisplayName("高度Pin1X")]
+        [SugarColumn(Length =50, IsNullable = true)]
+        public string? PIN1X { get; set; }       
+        [DisplayName("高度Pin2X")][SugarColumn(Length = 50, IsNullable = true)] public string? PIN2X { get; set; }     
+        [DisplayName("高度Pin3X")][SugarColumn(Length = 50, IsNullable = true)] public string? PIN3X { get; set; }
       
-        [DisplayName("高度Pin1Y")]  public string? PIN1Y { get; set; }     
-        [DisplayName("高度Pin2Y")]  public string? PIN2Y { get; set; }
-        [DisplayName("高度Pin3Y")]  public string? PIN3Y { get; set; }
+        [DisplayName("高度Pin1Y")][SugarColumn(Length = 50, IsNullable = true)] public string? PIN1Y { get; set; }     
+        [DisplayName("高度Pin2Y")][SugarColumn(Length = 50, IsNullable = true)] public string? PIN2Y { get; set; }
+        [DisplayName("高度Pin3Y")][SugarColumn(Length = 50, IsNullable = true)] public string? PIN3Y { get; set; }
 
+        [SugarColumn(IsIgnore = true)]
         public Brush? Pin1Color { get; set; }=Brushes.Red;
         //用于日志记录
         [SugarColumn(IsIgnore = true)]
