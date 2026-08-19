@@ -40,7 +40,7 @@ namespace WpfApp1.ViewModels
             };
           
         }
-
+        //接收到数据后解析数据，更新UI属性
         private async Task DataAnnalysis(byte[] s)
         {
             string data = Encoding.ASCII.GetString(s);
@@ -77,6 +77,7 @@ namespace WpfApp1.ViewModels
                
             });
         }
+        //启动TCP连接命令
         public ICommand StartTcp
         { 
             get

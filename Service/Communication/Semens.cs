@@ -1,7 +1,8 @@
 ﻿using HslCommunication;
 using HslCommunication.Profinet.Siemens;
+using System;
+using System.Threading;
 using WpfApp1.Service.Communication.Interfaces;
-
 
 namespace WpfApp1.Service.Communication
 {
@@ -21,13 +22,35 @@ namespace WpfApp1.Service.Communication
     }
 
     /// <summary>
-    /// 西门子PLC通信类（线程安全），支持S7-1200和S7-1500
+    /// 西门子PLC通信类（线程安全），支持S7-1200和S7-1500，带后台轮询与自动重连
     /// </summary>
-    public class Semens:IPlcServers
+    public class Semens : IPlcServers, IDisposable
     {
         private SiemensS7Net plc;
         private readonly object _commLock = new object();
         private bool isConnected = false;
+
+        // 轮询与重连定时器
+        private Timer? _pollingTimer;
+        private Timer? _reconnectTimer;
+
+        // 配置参数
+        private readonly int _pollingIntervalMs;
+        private readonly int _reconnectIntervalMs;
+        private string _ipAddress = string.Empty;
+        private byte _rack;
+        private byte _slot;
+        private bool _isDisposed;
+
+        /// <summary>
+        /// 心跳/检测地址，用于轮询测试连接状态（默认 M0.0，可更改）
+        /// </summary>
+        public string HeartbeatAddress { get; set; } = "M0.0";
+
+        /// <summary>
+        /// 连接状态改变事件
+        /// </summary>
+        public event Action<bool>? ConnectionStatusChanged;
 
         /// <summary>
         /// 最后一次操作的错误信息
@@ -35,54 +58,141 @@ namespace WpfApp1.Service.Communication
         public string LastErrorMessage { get; private set; } = string.Empty;
 
         /// <summary>
-        /// 构造函数，指定PLC型号
+        /// 构造函数，指定PLC型号、轮询间隔与重连间隔
         /// </summary>
         /// <param name="plcType">S1200 或 S1500</param>
-        public Semens(SiemensPLCS plcType)
+        /// <param name="pollingIntervalMs">轮询间隔（毫秒），默认1000ms</param>
+        /// <param name="reconnectIntervalMs">重连间隔（毫秒），默认5000ms</param>
+        public Semens(SiemensPLCS plcType, int pollingIntervalMs = 1000, int reconnectIntervalMs = 5000)
         {
             plc = new SiemensS7Net(plcType);
+            _pollingIntervalMs = pollingIntervalMs;
+            _reconnectIntervalMs = reconnectIntervalMs;
+
+            // 初始化定时器（暂不启动）
+            _pollingTimer = new Timer(OnPollingTick, null, Timeout.Infinite, Timeout.Infinite);
+            _reconnectTimer = new Timer(OnReconnectTick, null, Timeout.Infinite, Timeout.Infinite);
         }
 
         /// <summary>
         /// 连接PLC（线程安全）
         /// </summary>
-        /// <param name="ipAddress">IP地址</param>
-        /// <param name="rack">机架号，通常1200/1500为0</param>
-        /// <param name="slot">槽号，1200通常1，1500通常1或0</param>
-        /// <param name="message">连接结果描述</param>
-        /// <returns>操作结果</returns>
         public OutCome Connect(string ipAddress, byte rack, byte slot, out string message)
         {
             message = string.Empty;
             lock (_commLock)
             {
-                try
+                _ipAddress = ipAddress;
+                _rack = rack;
+                _slot = slot;
+
+                return ConnectInternal(out message);
+            }
+        }
+
+        /// <summary>
+        /// 内部连接逻辑（已被 lock 保护）
+        /// </summary>
+        private OutCome ConnectInternal(out string message)
+        {
+            try
+            {
+                plc.IpAddress = _ipAddress;
+                plc.Rack = _rack;
+                plc.Slot = _slot;
+
+                OperateResult res = plc.ConnectServer();
+                bool previousState = isConnected;
+                isConnected = res.IsSuccess;
+
+                if (res.IsSuccess)
                 {
-                    plc.IpAddress = ipAddress;
-                    plc.Rack = rack;
-                    plc.Slot = slot;
-                    OperateResult res = plc.ConnectServer();
-                    isConnected = res.IsSuccess;
-                    if (res.IsSuccess)
+                    message = "连接成功";
+                    LastErrorMessage = "";
+
+                    // 停止重连定时器，启动轮询定时器
+                    _reconnectTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    _pollingTimer?.Change(0, _pollingIntervalMs);
+
+                    if (!previousState)
                     {
-                        message = "连接成功";
-                        LastErrorMessage = "";
-                        return OutCome.Success;
+                        ConnectionStatusChanged?.Invoke(true);
                     }
-                    else
-                    {
-                        message = res.Message;
-                        LastErrorMessage = res.Message;
-                        return OutCome.Fail;
-                    }
+                    return OutCome.Success;
                 }
-                catch (Exception ex)
+                else
                 {
-                    message = ex.Message;
-                    LastErrorMessage = ex.Message;
+                    message = res.Message;
+                    LastErrorMessage = res.Message;
+
+                    // 连接失败，触发自动重连机制
+                    StartReconnect();
+
+                    if (previousState)
+                    {
+                        ConnectionStatusChanged?.Invoke(false);
+                    }
                     return OutCome.Fail;
                 }
             }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+                LastErrorMessage = ex.Message;
+                StartReconnect();
+                return OutCome.Fail;
+            }
+        }
+
+        /// <summary>
+        /// 后台轮询回调（检测连接健康度）
+        /// </summary>
+        private void OnPollingTick(object? state)
+        {
+            if (_isDisposed) return;
+
+            lock (_commLock)
+            {
+                if (!isConnected) return;
+
+                // 通过读取简单地址检测连接
+                var result = plc.ReadBool(HeartbeatAddress);
+                if (!result.IsSuccess)
+                {
+                    // 通信中断，标记未连接并启动重连
+                    isConnected = false;
+                    LastErrorMessage = $"轮询通信失败: {result.Message}";
+
+                    _pollingTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    StartReconnect();
+
+                    ConnectionStatusChanged?.Invoke(false);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 后台自动重连回调
+        /// </summary>
+        private void OnReconnectTick(object? state)
+        {
+            if (_isDisposed) return;
+
+            lock (_commLock)
+            {
+                if (isConnected) return;
+
+                ConnectInternal(out _);
+            }
+        }
+
+        /// <summary>
+        /// 启动重连定时器
+        /// </summary>
+        private void StartReconnect()
+        {
+            _pollingTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+            _reconnectTimer?.Change(_reconnectIntervalMs, _reconnectIntervalMs);
         }
 
         /// <summary>
@@ -92,8 +202,18 @@ namespace WpfApp1.Service.Communication
         {
             lock (_commLock)
             {
+                // 停止所有定时器
+                _pollingTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                _reconnectTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+
                 plc?.ConnectClose();
+                bool previousState = isConnected;
                 isConnected = false;
+
+                if (previousState)
+                {
+                    ConnectionStatusChanged?.Invoke(false);
+                }
             }
         }
 
@@ -114,42 +234,40 @@ namespace WpfApp1.Service.Communication
         /// <summary>
         /// 通用读写方法（线程安全，地址自动适配）
         /// </summary>
-        /// <param name="isRead">true:读，false:写</param>
-        /// <param name="area">区域：DB, M, I, Q 等</param>
-        /// <param name="dbNumber">DB块号，非DB区域忽略</param>
-        /// <param name="startAddress">
-        /// 起始地址：
-        /// - Bool类型需以位格式传入，如 "0.0"、"2.3"
-        /// - 非Bool类型传数字偏移量，如 "0"、"10"（内部自动拼接 DBW/DBD/DBB 前缀）
-        /// </param>
-        /// <param name="value">读写值，读时输出，写时输入</param>
-        /// <param name="dataType">数据类型</param>
-        /// <param name="message">操作结果描述</param>
-        /// <param name="length">数组长度（字符串/字节数组有效，默认1）</param>
-        /// <returns>操作结果</returns>
         public OutCome ReadWrite(bool isRead, string area, int dbNumber, string startAddress, ref string value,
             PlcDataType dataType, out string message, int length = 1)
         {
             message = string.Empty;
 
-            bool connected;
-            lock (_commLock) { connected = isConnected; }
-            if (!connected)
-            {
-                message = "PLC未连接";
-                LastErrorMessage = message;
-                return OutCome.Fail;
-            }
-
             lock (_commLock)
             {
+                if (!isConnected)
+                {
+                    message = "PLC未连接";
+                    LastErrorMessage = message;
+                    return OutCome.Fail;
+                }
+
                 try
                 {
-                    // 核心：根据数据类型构建正确的地址格式
                     string address = BuildAddress(area, dbNumber, startAddress, dataType);
-                    return isRead
+                    OutCome result = isRead
                         ? ReadValue(address, dataType, length, ref value, out message)
                         : WriteValue(address, dataType, value, length, out message);
+
+                    // 如果读写失败且属于通信异常，触发重连机制
+                    if (result == OutCome.Fail && isConnected)
+                    {
+                        var ping = plc.ReadBool(HeartbeatAddress);
+                        if (!ping.IsSuccess)
+                        {
+                            isConnected = false;
+                            StartReconnect();
+                            ConnectionStatusChanged?.Invoke(false);
+                        }
+                    }
+
+                    return result;
                 }
                 catch (Exception ex)
                 {
@@ -160,11 +278,6 @@ namespace WpfApp1.Service.Communication
             }
         }
 
-
-
-        /// <summary>
-        /// 构建Hsl通信所需的完整地址（自动添加DBX/DBW/DBD/DBB前缀）
-        /// </summary>
         private string BuildAddress(string area, int dbNumber, string startAddress, PlcDataType dataType)
         {
             string areaUpper = area.ToUpper().Trim();
@@ -174,33 +287,26 @@ namespace WpfApp1.Service.Communication
             {
                 if (isBit)
                 {
-                    // Bool类型：DB1.DBX0.0
                     return $"DB{dbNumber}.DBX{startAddress}";
                 }
                 else
                 {
-                    // 非Bool类型：根据数据宽度选择前缀
                     string prefix = dataType switch
                     {
                         PlcDataType.Int16 or PlcDataType.UInt16 => "DBW",
                         PlcDataType.Int32 or PlcDataType.UInt32 or PlcDataType.Float => "DBD",
                         PlcDataType.String or PlcDataType.ByteArray => "DBB",
-                        _ => "" // 理论上不会执行
+                        _ => ""
                     };
                     return $"DB{dbNumber}.{prefix}{startAddress}";
                 }
             }
             else
             {
-                // M/I/Q等区域：Bool -> M0.0，非Bool -> M0
-                // 库会自动处理位/字/双字，不需要额外前缀
                 return $"{areaUpper}{startAddress}";
             }
         }
 
-        /// <summary>
-        /// 执行读操作（在锁内调用）
-        /// </summary>
         private OutCome ReadValue(string address, PlcDataType dataType, int length, ref string value, out string message)
         {
             message = string.Empty;
@@ -210,95 +316,116 @@ namespace WpfApp1.Service.Communication
                 {
                     case PlcDataType.Bool:
                         var bRes = plc.ReadBool(address);
-                        if (bRes.IsSuccess)
-                        {
-                            value = bRes.Content.ToString();
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = bRes.Message;
-                        break;
+                        if (bRes.IsSuccess) { value = bRes.Content.ToString(); LastErrorMessage = ""; return OutCome.Success; }
+                        message = bRes.Message; break;
 
                     case PlcDataType.Int16:
                         var i16Res = plc.ReadInt16(address);
-                        if (i16Res.IsSuccess)
-                        {
-                            value = i16Res.Content.ToString();
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = i16Res.Message;
-                        break;
+                        if (i16Res.IsSuccess) { value = i16Res.Content.ToString(); LastErrorMessage = ""; return OutCome.Success; }
+                        message = i16Res.Message; break;
 
                     case PlcDataType.Int32:
                         var i32Res = plc.ReadInt32(address);
-                        if (i32Res.IsSuccess)
-                        {
-                            value = i32Res.Content.ToString();
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = i32Res.Message;
-                        break;
+                        if (i32Res.IsSuccess) { value = i32Res.Content.ToString(); LastErrorMessage = ""; return OutCome.Success; }
+                        message = i32Res.Message; break;
 
                     case PlcDataType.UInt16:
                         var ui16Res = plc.ReadUInt16(address);
-                        if (ui16Res.IsSuccess)
-                        {
-                            value = ui16Res.Content.ToString();
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = ui16Res.Message;
-                        break;
+                        if (ui16Res.IsSuccess) { value = ui16Res.Content.ToString(); LastErrorMessage = ""; return OutCome.Success; }
+                        message = ui16Res.Message; break;
 
                     case PlcDataType.UInt32:
                         var ui32Res = plc.ReadUInt32(address);
-                        if (ui32Res.IsSuccess)
-                        {
-                            value = ui32Res.Content.ToString();
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = ui32Res.Message;
-                        break;
+                        if (ui32Res.IsSuccess) { value = ui32Res.Content.ToString(); LastErrorMessage = ""; return OutCome.Success; }
+                        message = ui32Res.Message; break;
 
                     case PlcDataType.Float:
                         var fRes = plc.ReadFloat(address);
-                        if (fRes.IsSuccess)
-                        {
-                            value = fRes.Content.ToString();
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = fRes.Message;
-                        break;
+                        if (fRes.IsSuccess) { value = fRes.Content.ToString(); LastErrorMessage = ""; return OutCome.Success; }
+                        message = fRes.Message; break;
 
                     case PlcDataType.String:
                         var sRes = plc.ReadString(address, (ushort)length);
-                        if (sRes.IsSuccess)
-                        {
-                            value = sRes.Content;
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = sRes.Message;
-                        break;
+                        if (sRes.IsSuccess) { value = sRes.Content; LastErrorMessage = ""; return OutCome.Success; }
+                        message = sRes.Message; break;
 
                     case PlcDataType.ByteArray:
                         var byteRes = plc.Read(address, (ushort)length);
-                        if (byteRes.IsSuccess)
-                        {
-                            value = Convert.ToBase64String(byteRes.Content);
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = byteRes.Message;
-                        break;
+                        if (byteRes.IsSuccess) { value = Convert.ToBase64String(byteRes.Content); LastErrorMessage = ""; return OutCome.Success; }
+                        message = byteRes.Message; break;
 
                     default:
-                        message = "不支持的数据类型";
-                        break;
+                        message = "不支持的数据类型"; break;
+                }
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+            }
+
+            LastErrorMessage = message;
+            return OutCome.Fail;
+        }
+
+        private OutCome WriteValue(string address, PlcDataType dataType, string value, int length, out string message)
+        {
+            message = string.Empty;
+            try
+            {
+                OperateResult result;
+                switch (dataType)
+                {
+                    case PlcDataType.Bool:
+                        if (!bool.TryParse(value, out bool bVal)) { message = "写入值无法转换为bool"; break; }
+                        result = plc.Write(address, bVal);
+                        if (result.IsSuccess) { LastErrorMessage = ""; return OutCome.Success; }
+                        message = result.Message; break;
+
+                    case PlcDataType.Int16:
+                        if (!short.TryParse(value, out short sVal)) { message = "写入值无法转换为Int16"; break; }
+                        result = plc.Write(address, sVal);
+                        if (result.IsSuccess) { LastErrorMessage = ""; return OutCome.Success; }
+                        message = result.Message; break;
+
+                    case PlcDataType.Int32:
+                        if (!int.TryParse(value, out int iVal)) { message = "写入值无法转换为Int32"; break; }
+                        result = plc.Write(address, iVal);
+                        if (result.IsSuccess) { LastErrorMessage = ""; return OutCome.Success; }
+                        message = result.Message; break;
+
+                    case PlcDataType.UInt16:
+                        if (!ushort.TryParse(value, out ushort usVal)) { message = "写入值无法转换为UInt16"; break; }
+                        result = plc.Write(address, usVal);
+                        if (result.IsSuccess) { LastErrorMessage = ""; return OutCome.Success; }
+                        message = result.Message; break;
+
+                    case PlcDataType.UInt32:
+                        if (!uint.TryParse(value, out uint uiVal)) { message = "写入值无法转换为UInt32"; break; }
+                        result = plc.Write(address, uiVal);
+                        if (result.IsSuccess) { LastErrorMessage = ""; return OutCome.Success; }
+                        message = result.Message; break;
+
+                    case PlcDataType.Float:
+                        if (!float.TryParse(value, out float fVal)) { message = "写入值无法转换为Float"; break; }
+                        result = plc.Write(address, fVal);
+                        if (result.IsSuccess) { LastErrorMessage = ""; return OutCome.Success; }
+                        message = result.Message; break;
+
+                    case PlcDataType.String:
+                        result = plc.Write(address, value);
+                        if (result.IsSuccess) { LastErrorMessage = ""; return OutCome.Success; }
+                        message = result.Message; break;
+
+                    case PlcDataType.ByteArray:
+                        byte[] bytes;
+                        try { bytes = Convert.FromBase64String(value); }
+                        catch { message = "写入值无法从Base64转换为字节数组"; break; }
+                        result = plc.Write(address, bytes);
+                        if (result.IsSuccess) { LastErrorMessage = ""; return OutCome.Success; }
+                        message = result.Message; break;
+
+                    default:
+                        message = "不支持的数据类型"; break;
                 }
             }
             catch (Exception ex)
@@ -311,148 +438,17 @@ namespace WpfApp1.Service.Communication
         }
 
         /// <summary>
-        /// 执行写操作（在锁内调用）
+        /// 释放资源
         /// </summary>
-        private OutCome WriteValue(string address, PlcDataType dataType, string value, int length, out string message)
+        public void Dispose()
         {
-            message = string.Empty;
-            try
-            {
-                OperateResult result;
-                switch (dataType)
-                {
-                    case PlcDataType.Bool:
-                        if (!bool.TryParse(value, out bool bVal))
-                        {
-                            message = "写入值无法转换为bool";
-                            break;
-                        }
-                        result = plc.Write(address, bVal);
-                        if (result.IsSuccess)
-                        {
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = result.Message;
-                        break;
+            if (_isDisposed) return;
+            _isDisposed = true;
 
-                    case PlcDataType.Int16:
-                        if (!short.TryParse(value, out short sVal))
-                        {
-                            message = "写入值无法转换为Int16";
-                            break;
-                        }
-                        result = plc.Write(address, sVal);
-                        if (result.IsSuccess)
-                        {
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = result.Message;
-                        break;
+            Disconnect();
 
-                    case PlcDataType.Int32:
-                        if (!int.TryParse(value, out int iVal))
-                        {
-                            message = "写入值无法转换为Int32";
-                            break;
-                        }
-                        result = plc.Write(address, iVal);
-                        if (result.IsSuccess)
-                        {
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = result.Message;
-                        break;
-
-                    case PlcDataType.UInt16:
-                        if (!ushort.TryParse(value, out ushort usVal))
-                        {
-                            message = "写入值无法转换为UInt16";
-                            break;
-                        }
-                        result = plc.Write(address, usVal);
-                        if (result.IsSuccess)
-                        {
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = result.Message;
-                        break;
-
-                    case PlcDataType.UInt32:
-                        if (!uint.TryParse(value, out uint uiVal))
-                        {
-                            message = "写入值无法转换为UInt32";
-                            break;
-                        }
-                        result = plc.Write(address, uiVal);
-                        if (result.IsSuccess)
-                        {
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = result.Message;
-                        break;
-
-                    case PlcDataType.Float:
-                        if (!float.TryParse(value, out float fVal))
-                        {
-                            message = "写入值无法转换为Float";
-                            break;
-                        }
-                        result = plc.Write(address, fVal);
-                        if (result.IsSuccess)
-                        {
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = result.Message;
-                        break;
-
-                    case PlcDataType.String:
-                        result = plc.Write(address, value);
-                        if (result.IsSuccess)
-                        {
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = result.Message;
-                        break;
-
-                    case PlcDataType.ByteArray:
-                        byte[] bytes;
-                        try
-                        {
-                            bytes = Convert.FromBase64String(value);
-                        }
-                        catch
-                        {
-                            message = "写入值无法从Base64转换为字节数组";
-                            break;
-                        }
-                        result = plc.Write(address, bytes);
-                        if (result.IsSuccess)
-                        {
-                            LastErrorMessage = "";
-                            return OutCome.Success;
-                        }
-                        message = result.Message;
-                        break;
-
-                    default:
-                        message = "不支持的数据类型";
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                message = ex.Message;
-            }
-
-            LastErrorMessage = message;
-            return OutCome.Fail;
+            _pollingTimer?.Dispose();
+            _reconnectTimer?.Dispose();
         }
     }
 }
