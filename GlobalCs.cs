@@ -30,4 +30,9 @@ namespace WpfApp1
         [Description("失败")]
         Fail
     }
+
+    public static class  StationSignal
+    {
+        
+    }
 }

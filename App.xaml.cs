@@ -1,9 +1,9 @@
-﻿using System.Configuration;
-using System.Windows;
+﻿using System.Windows;
 using WpfApp1.Models;
 using WpfApp1.Service.Communication.Sql;
 using SqlSugar;
 using WpfApp1.Service.Communication;
+using Microsoft.Extensions.DependencyInjection;
 namespace WpfApp1
 {
     /// <summary>
@@ -16,7 +16,8 @@ namespace WpfApp1
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
-            Semens = new Semens(HslCommunication.Profinet.Siemens.SiemensPLCS.S1200);
+            Semens = new Semens(HslCommunication.Profinet.Siemens.SiemensPLCS.S1200,2000,2500);
+            //创建数据库和表，并初始化后台存储处理器
             DbCreate();
            
         }

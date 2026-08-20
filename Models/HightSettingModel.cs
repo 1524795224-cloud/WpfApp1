@@ -23,8 +23,7 @@ namespace WpfApp1.Models
         [DisplayName("高度Pin2Y")][SugarColumn(Length = 50, IsNullable = true)] public string? PIN2Y { get; set; }
         [DisplayName("高度Pin3Y")][SugarColumn(Length = 50, IsNullable = true)] public string? PIN3Y { get; set; }
 
-        [SugarColumn(IsIgnore = true)]
-        public Brush? Pin1Color { get; set; }=Brushes.Red;
+       
         //用于日志记录
         [SugarColumn(IsIgnore = true)]
         public string? Message { get; set; } 

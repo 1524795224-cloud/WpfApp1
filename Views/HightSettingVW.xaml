@@ -5,41 +5,41 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:ViewModels="clr-namespace:WpfApp1.ViewModels"
              xmlns:local="clr-namespace:WpfApp1.Views"
+             xmlns:converters="clr-namespace:WpfApp1.Service"
              mc:Ignorable="d"
-             d:DesignHeight="450" d:DesignWidth="800">
-    <UserControl.DataContext>
-        <ViewModels:HightSettingVM />
-    </UserControl.DataContext>
+             d:DesignHeight="450" d:DesignWidth="800"
+             d:DataContext="{d:DesignInstance Type=ViewModels:HightSettingVM, IsDesignTimeCreatable=False}">
+
+    <UserControl.Resources>
+        <converters:BoolToBrushConverter x:Key="BoolToBrushConverter"
+                                         TrueBrush="Green"
+                                         FalseBrush="Red"/>
+    </UserControl.Resources>
 
     <Grid Background="White">
         <StackPanel>
-            <Border BorderBrush="Black" BorderThickness="1,1,1,1" Background="{Binding Pin1Color}">
-                <TextBlock Text="{Binding PIN1X}" Height="20" HorizontalAlignment="Center"></TextBlock>
+            <Border BorderBrush="Black" BorderThickness="1"
+                    Background="{Binding IsRunning, Converter={StaticResource BoolToBrushConverter}}">
+                <TextBlock Text="{Binding PIN1X}" Height="20" HorizontalAlignment="Center"/>
             </Border>
-            <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN2X}" Height="20" HorizontalAlignment="Center"></TextBlock>
+            <Border BorderBrush="Black" BorderThickness="1">
+                <TextBlock Text="{Binding PIN2X}" Height="20" HorizontalAlignment="Center"/>
             </Border>
-            <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN3X}" Height="20" HorizontalAlignment="Center" ></TextBlock>
+            <Border BorderBrush="Black" BorderThickness="1">
+                <TextBlock Text="{Binding PIN3X}" Height="20" HorizontalAlignment="Center"/>
             </Border>
-            <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN1Y}" Height="20" HorizontalAlignment="Center"></TextBlock>
+            <Border BorderBrush="Black" BorderThickness="1">
+                <TextBlock Text="{Binding PIN1Y}" Height="20" HorizontalAlignment="Center"/>
             </Border>
-            <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN2Y}" Height="20" HorizontalAlignment="Center"></TextBlock>
+            <Border BorderBrush="Black" BorderThickness="1">
+                <TextBlock Text="{Binding PIN2Y}" Height="20" HorizontalAlignment="Center"/>
             </Border>
-            <Border BorderBrush="Black" BorderThickness="1,1,1,1">
-                <TextBlock Text="{Binding PIN3Y}" Height="20" HorizontalAlignment="Center" ></TextBlock>
+            <Border BorderBrush="Black" BorderThickness="1">
+                <TextBlock Text="{Binding PIN3Y}" Height="20" HorizontalAlignment="Center"/>
             </Border>
-            <Border BorderBrush="Black" BorderThickness="1,1,1,1">
+            <Border BorderBrush="Black" BorderThickness="1">
                 <Button Content="启动连接" Command="{Binding StartTcp}"/>
             </Border>
-
-
-
-
-
         </StackPanel>
-
     </Grid>
 </UserControl>

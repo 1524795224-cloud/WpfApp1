@@ -4,6 +4,7 @@
              xmlns:local="clr-namespace:WpfApp1"
              xmlns:models="clr-namespace:WpfApp1.Models"
              xmlns:views="clr-namespace:WpfApp1.Views"
+             
              StartupUri="LoginView.xaml">
     <Application.Resources>
         <!--<ResourceDictionary>
@@ -11,7 +12,7 @@
         <ResourceDictionary Source="/WpfApp1;component/DictionaryTheme.xaml" />
         </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>-->
-
+       
         <DataTemplate DataType="{x:Type models:HightSettingModel}">
             <views:HightSettingVW/>
         </DataTemplate>

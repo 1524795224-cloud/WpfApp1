@@ -12,6 +12,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using WpfApp1.Service.Communication;
 using WpfApp1.ViewModels;
 
 namespace WpfApp1.Views
@@ -24,7 +25,8 @@ namespace WpfApp1.Views
         public HightSettingVW()
         {
             InitializeComponent();
-            //this.DataContext = new HightSettingVM();
+            HightTcpClient hight=new HightTcpClient(1024);
+            this.DataContext = new HightSettingVM(App.Semens,App.StorageProcessor,hight);
         }
     }
 }

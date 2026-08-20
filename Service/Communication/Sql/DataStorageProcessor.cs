@@ -11,7 +11,7 @@ namespace WpfApp1.Service.Communication.Sql
     /// 高性能后台通用数据异步落库处理器
     /// 基于 Channel 实现生产者-消费者模式，支持多 Model 自动批量刷盘
     /// </summary>
-    public class DataStorageProcessor
+    public class DataStorageProcessor: IDataStorageProcessor
     {
         private readonly ISqlsugarHelper _sqlSugarHelper;
         // 存储不同 Model 类型对应的 Channel 消费通道
