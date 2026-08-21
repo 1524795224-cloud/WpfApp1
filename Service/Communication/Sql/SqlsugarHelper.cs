@@ -101,7 +101,7 @@ namespace WpfApp1.Service.Communication.Sql
                 }
                 else
                 {
-                    throw new NotSupportedException($"当前数据库类型 {_dbType} 的自动创建数据库功能未实现，请手动创建或使用适合的连接字符串。");
+                    App.Logger.Database($"当前数据库类型 {_dbType} 的自动创建数据库功能未实现，请手动创建或使用适合的连接字符串。");
                 }
 
                 // 重新初始化，连接到新建的数据库
@@ -109,7 +109,7 @@ namespace WpfApp1.Service.Communication.Sql
             }
             catch (Exception ex)
             {
-                throw new Exception($"创建数据库失败: {ex.Message}", ex);
+                App.Logger.Error($"创建数据库失败: {ex.Message}", ex);
             }
         }
 
@@ -120,7 +120,7 @@ namespace WpfApp1.Service.Communication.Sql
         {
             if (entityTypes == null || entityTypes.Length == 0)
             {
-                throw new ArgumentException("请至少提供一个实体类型");
+                App.Logger.Database("请至少提供一个实体类型");
             }
 
             try
@@ -129,7 +129,7 @@ namespace WpfApp1.Service.Communication.Sql
             }
             catch (Exception ex)
             {
-                throw new Exception($"创建数据表失败: {ex.Message}", ex);
+                App.Logger.Error($"创建数据表失败: {ex.Message}", ex);
             }
         }
 

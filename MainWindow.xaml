@@ -146,8 +146,7 @@
                 <ColumnDefinition/>
                 <ColumnDefinition/>
             </Grid.ColumnDefinitions>
-            <ContentControl Grid.Column="0" Content="{Binding hightSettingModel}"/>
-            <DataGrid Grid.Column="1" Name="LogDataGrid"></DataGrid>
+            <ContentControl Grid.Column="0" Content="{Binding  hightSettingModel}"/>
 
         </Grid>
     </Grid>

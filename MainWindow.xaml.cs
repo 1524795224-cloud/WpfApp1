@@ -26,10 +26,7 @@ namespace WpfApp1
             InitializeComponent();
             viewModel = new MainWindowViewModel();
             this.DataContext = viewModel;
-           
-           
-          
-           
+                                      
         }            
         #region 固定部分
         private void CloseWindow(object sender, RoutedEventArgs e)

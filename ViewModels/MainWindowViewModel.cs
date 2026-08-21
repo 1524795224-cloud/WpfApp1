@@ -11,10 +11,11 @@ namespace WpfApp1.ViewModels
     {
 
         public HightSettingModel hightSettingModel { get; set; }
-        
+       
         public MainWindowViewModel()
         {
-            hightSettingModel = new HightSettingModel();          
+            hightSettingModel = new HightSettingModel();   
+           // hightSettingModel1=new HightSettingModel();
         }
 
     }

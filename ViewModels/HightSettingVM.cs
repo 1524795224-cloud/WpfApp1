@@ -24,6 +24,7 @@ namespace WpfApp1.ViewModels
         private CancellationTokenSource _cts = new();
         byte[] startCommand=Encoding.UTF8.GetBytes("IDN?");
 
+        //构造函数，注入PLC和数据存储处理器
         public HightSettingVM(IPlcServers _plc, IDataStorageProcessor dataStorageProcessor, ITcpClientSocker _tcp)
         {
             plc = _plc;
@@ -37,6 +38,7 @@ namespace WpfApp1.ViewModels
             _ = Task.Run(() => HightTestStationAsync(_cts.Token), CancellationToken.None);
 
         }
+        // 轮询 PLC 启动信号并执行测试
         private async Task HightTestStationAsync(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
@@ -68,16 +70,12 @@ namespace WpfApp1.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"轮询异常: {ex.Message}");
+                    App.Logger.Error($"轮询异常: {ex.Message}");
                     await Task.Delay(1000, token);
                 }
             }
         }
-
-        // 替换 ExecuteTestAsync 方法中的 handler 定义和相关事件订阅/移除
-        // 原代码：Action<byte[],Task>? handler = null;
-        // 修正为：Func<byte[], Task>? handler = null;
-
+        // 执行测试逻辑
         private async Task ExecuteTestAsync()
         {
             // 防止重入
@@ -129,12 +127,13 @@ namespace WpfApp1.ViewModels
 
                 if (writeResult != OutCome.Success)
                 {
-                    Message = "PLC 结果写回失败: " + writeMsg;
+                    App.Logger.Error("PLC 结果写回失败: " + writeMsg);                  
                 }
             }
             catch (OperationCanceledException)
             {
-                Message = "测试超时";
+                App.Logger.Error("测试超时");
+              
                 // 可写超时结果到 PLC（可选）
             }
             catch (Exception ex)
@@ -263,7 +262,7 @@ namespace WpfApp1.ViewModels
             set { 
                 _model.Message = value; OnPropertyChanged();
                 //将数据保存到D:Log//文件名为当天日期.txt，内容为具体时间和Message内容
-                _ =LogService.WriteAsync(value);
+                App.Logger.Info(value);
             }
         }
        
