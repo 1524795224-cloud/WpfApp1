@@ -24,19 +24,19 @@ namespace WpfApp1.ViewModels
         private CancellationTokenSource _cts = new();
         byte[] startCommand=Encoding.UTF8.GetBytes("IDN?");
 
-        //构造函数，注入PLC和数据存储处理器
         public HightSettingVM(IPlcServers _plc, IDataStorageProcessor dataStorageProcessor, ITcpClientSocker _tcp)
         {
             plc = _plc;
-            dataStorage= dataStorageProcessor;
-            tcpSocket= _tcp;
+            dataStorage = dataStorageProcessor;
+            tcpSocket = _tcp;   // 直接使用注入的实例，不要 new
+
             _model = new HightSettingModel();
-            tcpSocket = new HightTcpClient(1024);
-            tcpSocket.OnConnected +=async () => { await Task.Delay(1);Message = "高度通讯连接成功"; };
-            tcpSocket.OnDisconnected += async() => { await Task.Delay(1); Message = "高度通讯断开连接"; };                    
+
+            tcpSocket.OnConnected += async () => { await Task.Delay(1); Message = "高度通讯连接成功"; };
+            tcpSocket.OnDisconnected += async () => { await Task.Delay(1); Message = "高度通讯断开连接"; };
+            tcpSocket.OnReceived += async (s) => {await DataAnnalysis(s); };
             _cts = new CancellationTokenSource();
             _ = Task.Run(() => HightTestStationAsync(_cts.Token), CancellationToken.None);
-
         }
         // 轮询 PLC 启动信号并执行测试
         private async Task HightTestStationAsync(CancellationToken token)

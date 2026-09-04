@@ -53,7 +53,7 @@
                 <ColumnDefinition />
                 <ColumnDefinition Width="auto"/>
             </Grid.ColumnDefinitions>
-            <Image Source="/Assets/Images/XinYue.ico" Width="33"/>
+            <Image Source="/Assets/Images/app.ico" Width="33"/>
             <Border Grid.Column="1" Grid.ColumnSpan="1" Height="24" RenderTransformOrigin="0,1">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
@@ -66,7 +66,7 @@
                     <SkewTransform AngleX="-40" CenterX="0" CenterY="20"/>
                 </Border.RenderTransform>
             </Border>
-            <TextBlock Text="宁波市信跃电子科技有限公司" Grid.Column="1" VerticalAlignment="Center" Margin="30,0" Foreground="White" FontSize="20"/>
+            <TextBlock Text="托璞勒科技股份有限公司" Grid.Column="1" VerticalAlignment="Center" Margin="30,0" Foreground="White" FontSize="20"/>
             <Border Grid.Column="3" BorderThickness="5" Padding="8,8">
                 <!-- 使用样式，Content="X"，点击事件 ExitApp_Click -->
                 <Button x:Name="ExitApp"
@@ -142,7 +142,7 @@
                         Style="{StaticResource LoginViewButtonBase}"
                         Foreground="Black"  Command="{Binding ExitComand}"/>
             </Border>
-            
+
         </Grid>
     </Grid>
 </Window>

@@ -85,9 +85,9 @@
 
                 <!-- 左侧：Logo + 公司名称 -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="20,0,0,0" VerticalAlignment="Center">
-                    <Image Source="/Assets/Images/XinYue.ico" Width="42" Height="42"
+                    <Image Source="/Assets/Images/app.ico"  Width="42" Height="30"
                            VerticalAlignment="Center" Margin="0,0,15,0"/>
-                    <TextBlock Text="宁波市信跃电子科技有限公司"
+                    <TextBlock Text="托璞勒科技股份有限公司"
                                Foreground="#E0E6F0"
                                FontSize="24"
                                FontWeight="SemiBold"

@@ -1,11 +1,14 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿
+using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using System.Runtime.InteropServices;
 using System.Windows;
 using WpfApp1.Models;
 using WpfApp1.Service.Communication;
+using WpfApp1.Service.Communication.Interfaces;
 using WpfApp1.Service.Communication.Log;
 using WpfApp1.Service.Communication.Sql;
+using WpfApp1.ViewModels;
 namespace WpfApp1
 {
     /// <summary>
@@ -16,6 +19,7 @@ namespace WpfApp1
         public static DataStorageProcessor StorageProcessor { get; private set; }
         public static Semens Semens { get; private set; }
         public static Logger Logger { get; private set; }
+        public static IServiceProvider ServiceProvider { get; private set; }
 
         #region Win32 API
 
@@ -92,7 +96,20 @@ namespace WpfApp1
             Semens = new Semens(HslCommunication.Profinet.Siemens.SiemensPLCS.S1200,2000,2500);
             //创建数据库和表，并初始化后台存储处理器
             DbCreate();
-           
+
+            var services = new ServiceCollection();
+            services.AddSingleton<IPlcServers>(Semens);
+            services.AddSingleton<IDataStorageProcessor>(StorageProcessor);
+            services.AddTransient<ITcpClientSocker>(sp => new HightTcpClient(1024));
+            services.AddTransient<HightSettingVM>();
+
+            ServiceProvider = services.BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateOnBuild = true,
+                ValidateScopes = true
+            });
+
+
         }
 
         protected override void OnExit(ExitEventArgs e)

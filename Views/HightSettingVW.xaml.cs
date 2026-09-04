@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.DependencyInjection;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -25,8 +26,7 @@ namespace WpfApp1.Views
         public HightSettingVW()
         {
             InitializeComponent();
-            HightTcpClient hight=new HightTcpClient(1024);
-            this.DataContext = new HightSettingVM(App.Semens,App.StorageProcessor,hight);
+            this.DataContext = App.ServiceProvider.GetService<HightSettingVM>();
         }
     }
 }

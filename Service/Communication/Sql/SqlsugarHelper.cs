@@ -1,7 +1,8 @@
-﻿using System;
+﻿using SqlSugar;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq.Expressions;
-using SqlSugar;
 
 namespace WpfApp1.Service.Communication.Sql
 {
@@ -99,12 +100,30 @@ namespace WpfApp1.Service.Communication.Sql
                         }
                     }
                 }
+                else if (_dbType == DbType.Sqlite)
+                {
+                    // 对于 SQLite，使用 SqlSugar 自带的 CreateDatabase 方法（如果尚未创建）
+                    // 注意：需确保数据库文件所在目录存在，否则会报错
+                    string dbFilePath = $"{_databaseName}.db"; // 假设连接字符串是简单的文件名
+                    string? directory = Path.GetDirectoryName(dbFilePath);
+                    if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+
+                    // 如果文件不存在，SqlSugar 会自动创建；也可以显式调用
+                    if (!File.Exists(dbFilePath))
+                    {
+                        _db.DbMaintenance.CreateDatabase();
+                    }
+                }
                 else
                 {
                     App.Logger.Database($"当前数据库类型 {_dbType} 的自动创建数据库功能未实现，请手动创建或使用适合的连接字符串。");
                 }
 
-                // 重新初始化，连接到新建的数据库
+                // 重新初始化，连接到新建的数据库（对于 SQLite 其实可以省略，连接字符串没变）
+                
                 _db = CreateClientInstance(_connectionString);
             }
             catch (Exception ex)
